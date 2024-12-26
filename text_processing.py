@@ -1,40 +1,70 @@
 import pandas as pd
+import re
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+from nltk.util import ngrams
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import StandardScaler
-from scipy.sparse import hstack
+import numpy as np
 
-def load_and_prepare_data(filepath, stock_filepath=None):
-    """Load the dataset and optionally merge stock data."""
-    data = pd.read_csv(filepath)
-    
-    # Optional: Merge stock price features if provided
-    if stock_filepath:
-        stock_data = pd.read_csv(stock_filepath)
-        stock_data['Daily_Return'] = (stock_data['Adj Close'] - stock_data['Open']) / stock_data['Open'] * 100
-        stock_data['Volatility'] = (stock_data['High'] - stock_data['Low']) / stock_data['Open'] * 100
-        data = pd.merge(data, stock_data[['Date', 'Daily_Return', 'Volatility']], on='Date', how='left')
-    
-    # Split into training and testing sets
-    train = data[data['Date'] < '2015-01-01']
-    test = data[data['Date'] > '2014-12-31']
-    return train, test
+class TextProcessor:
+    def __init__(self, n=2):
+        self.lemmatizer = WordNetLemmatizer()
+        self.stop_words = set(stopwords.words('english')) 
+        self.n = n  # This will control the size of the N-grams (e.g., 2 for bigrams)
 
-def combine_headlines(data):
-    """Combine the top 25 headlines into a single string per row."""
-    return data.iloc[:, 2:27].apply(lambda row: ' '.join(str(x) for x in row if pd.notnull(x)), axis=1)
+    def clean_text(self, text):
+        text = re.sub(r"b[\'\"]", '', text)  
+        text = re.sub(r"[^\x00-\x7F]+", '', text)  # Remove non-ASCII characters
+        text = re.sub(r"[^a-zA-Z\s]", '', text.lower())  # Remove non-alphabetic characters
+        tokens = word_tokenize(text)  # Tokenize the text
+        tokens = [self.lemmatizer.lemmatize(word) for word in tokens if word not in self.stop_words]  # Lemmatize and remove stopwords
+        return tokens
 
-def vectorize_text(train_headlines, test_headlines):
-    """Convert text into numerical features using TF-IDF."""
-    vectorizer = TfidfVectorizer(max_features=5000)
-    train_vectors = vectorizer.fit_transform(train_headlines)
-    test_vectors = vectorizer.transform(test_headlines)
-    return vectorizer, train_vectors, test_vectors
+    def N_Grams(self, documents):
+        """
+        Convert documents into n-grams after cleaning and lemmatizing the text.
 
-def add_stock_features(train, test, train_vectors, test_vectors):
-    """Add numerical stock features to the text vectors."""
-    scaler = StandardScaler()
-    train_features = scaler.fit_transform(train[['Daily_Return', 'Volatility']].fillna(0))
-    test_features = scaler.transform(test[['Daily_Return', 'Volatility']].fillna(0))
-    train_combined = hstack([train_vectors, train_features])
-    test_combined = hstack([test_vectors, test_features])
-    return train_combined, test_combined
+        Parameters:
+        documents (list of str): List of text documents to process.
+
+        Returns:
+        ngram_documents (list of str): List of documents with n-grams instead of single words.
+        """
+        ngram_documents = [] 
+        for doc in documents:
+            tokens = doc.split()  # Already cleaned, just split into tokens
+            if len(tokens) >= self.n:  # Ensure there are enough tokens to create n-grams
+                ngrams_list = list(ngrams(tokens, self.n))  # Create n-grams
+                ngram_text = [' '.join(ngram) for ngram in ngrams_list]  # Join each n-gram into a string
+                ngram_documents.append(' '.join(ngram_text))  # Join all n-grams in the document
+            else:
+                # If not enough tokens to form N-grams, just append the tokens as-is
+                print(f"Document skipped (insufficient tokens for {self.n}-grams): {doc}")  # Print the document
+                ngram_documents.append(' '.join(tokens))
+        return ngram_documents
+
+    def compute_tfidf(self, documents, data):
+        """
+        Compute TF-IDF scores for a list of documents.
+
+        Parameters:
+        documents (list of str): List of text documents.
+
+        Returns:
+        tfidf_matrix: Sparse matrix of TF-IDF scores.
+        feature_names: List of feature names (terms).
+        """
+        # Define ngram_range parameter to use N-grams
+        vectorizer = TfidfVectorizer(max_features=10000)
+        vectorizer.fit(documents)
+        tfidf_matrix = vectorizer.transform(data)
+        feature_names = vectorizer.get_feature_names_out()
+        print(f"TF-IDF matrix shape: {tfidf_matrix.shape}")
+        print(f"Number of features: {len(feature_names)}")
+        print(f"Number of rows in 'data': {len(data)}")
+        with open('tf_idf_words.txt', 'w') as f:
+            f.write("Feature names (terms) from TF-IDF vectorizer:\n")
+            for feature in feature_names:
+                f.write(f"{feature}\n")
+        return tfidf_matrix, feature_names

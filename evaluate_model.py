@@ -1,20 +1,21 @@
-from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
-import joblib
+import torch
 
-def evaluate_model(model_path, test_vectors, test_labels):
-    """Load a trained model and evaluate it on the test data."""
-    model = joblib.load(model_path)
-    predictions = model.predict(test_vectors)
-    pred_prob = model.predict_proba(test_vectors)[:, 1]
+def evaluate_model(model, test_vectors, test_labels):
+    """
+    Evaluate the trained model on the test data.
 
-    # Classification Report
-    print("Classification Report:")
-    print(classification_report(test_labels, predictions))
-
-    # ROC-AUC Score
-    roc_auc = roc_auc_score(test_labels, pred_prob)
-    print(f"ROC-AUC Score: {roc_auc:.2f}")
-
-    # Confusion Matrix
-    print("Confusion Matrix:")
-    print(confusion_matrix(test_labels, predictions))
+    Parameters:
+        model (LogisticRegressionModel): The trained model.
+        test_vectors (numpy.array): The test input features.
+        test_labels (numpy.array): The true labels of the test data.
+    """
+    model.eval()  # Set the model to evaluation mode
+    test_vectors = torch.tensor(test_vectors, dtype=torch.float32)
+    test_labels = torch.tensor(test_labels, dtype=torch.float32).view(-1, 1)
+    
+    with torch.no_grad():
+        outputs = model(test_vectors)
+        predicted = (outputs >= 0.5).float()  # Threshold at 0.5 for binary classification
+        correct = (predicted == test_labels).float().sum()
+        accuracy = correct / len(test_labels)
+        print(f"Test Accuracy: {accuracy.item():.4f}")
