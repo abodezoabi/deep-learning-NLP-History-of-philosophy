@@ -1,143 +1,136 @@
 import pandas as pd
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+import re
+from sklearn.model_selection import train_test_split
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
-from sklearn.feature_extraction.text import CountVectorizer
-import pandas as pd
+from nltk.util import ngrams
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+import numpy as np
 
-def load_data(filepath):
-    df = pd.read_csv(filepath, encoding = 'ISO-8859-1')
-    df.dropna(inplace=True)
-    data = df.copy()
-    data.reset_index(inplace=True)
+class TextProcessor:
+    def __init__(self, n=2):
+        self.lemmatizer = WordNetLemmatizer()
+        self.stop_words = set(stopwords.words('english')) 
+        self.n = n  # This will control the size of the N-grams (e.g., 2 for bigrams)
     
-    train = data[data['Date'] < '20150101']
-    test = data[data['Date'] > '20141231']
-    y_train = train['Label']
-    train = train.iloc[:, 3:28]
-
-    y_test = test['Label']
-    test = test.iloc[:, 3:28]
-
-    return train, y_train, test, y_test
-
-
-def prepare_text(train, test):
-    
-    train.replace(to_replace='[^a-zA-Z]', value=' ', regex=True, inplace=True)
-    test.replace(to_replace='[^a-zA-Z]', value=' ', regex=True, inplace=True)
-
-    new_columns = [str(i) for i in range(0,25)]
-    
-    train.columns = new_columns
-    test.columns = new_columns
-
-    for i in new_columns:
-        train[i] = train[i].str.lower()
-        test[i] = test[i].str.lower()
-
-    train_headlines = []
-    test_headlines = []
-
-    for row in range(0, train.shape[0]):
-        train_headlines.append(' '.join(str(x) for x in train.iloc[row, 0:25]))
-
-    for row in range(0, test.shape[0]):
-        test_headlines.append(' '.join(str(x) for x in test.iloc[row, 0:25]))
+    def clean_text(self, text):
+        text = re.sub(r"b[\'\"]", '', text)  
+        text = re.sub(r"[^\x00-\x7F]+", '', text)  # Remove non-ASCII characters
+        text = re.sub(r"[^a-zA-Z\s]", '', text.lower())  # Remove non-alphabetic characters
         
-    ps = PorterStemmer()
-    train_corpus = []
-    test_corpus = []
-
-    for i in range(0, len(train_headlines)):
-        words = train_headlines[i].split()
-        words = [word for word in words if word not in set(stopwords.words('english'))]
-        words = [ps.stem(word) for word in words]
-        headline = ' '.join(words)
-        train_corpus.append(headline)
-
-    for i in range(0, len(test_headlines)):
-        words = test_headlines[i].split()
-        words = [word for word in words if word not in set(stopwords.words('english'))]
-        words = [ps.stem(word) for word in words]
-        headline = ' '.join(words)
-        test_corpus.append(headline)
-
-    return train_corpus, test_corpus
-
-
-def compute_bow(train, test):
-        """
-        Compute Bag of Words (BoW) representation for a list of documents.
-
-        Parameters:
-        documents (list of str): List of text documents.
-        data (list of str): Data to transform into BoW representation.
-
-        Returns:
-        bow_matrix: Sparse matrix of BoW counts.
-        feature_names: List of feature names (terms).
-        """
-        # Initialize the CountVectorizer (BoW)
-        vectorizer = CountVectorizer(max_features=10000)
-
-        # Fit the model on the documents to learn the vocabulary
-        train_vec = vectorizer.fit_transform(train)
-        # Val true - transform train
-        # Transform the data (documents) into a BoW matrix
-        test_vec = vectorizer.transform(test)
-
-        # Get the feature names (terms)
-        train_feature_names = vectorizer.get_feature_names_out()
-
-        print(f"Train BoW matrix shape: {train_vec.shape}")
-        print(f"Number of features: {len(train_feature_names)}")
-        print(f"Number of rows in 'data': {len(train)}")
-
-        # Optionally, save the feature names to a file
-        with open('bow_words.txt', 'w') as f:
-            f.write("Feature names (terms) from CountVectorizer:\n")
-            for feature in train_feature_names:
-                f.write(f"{feature}\n")
+        tokens = word_tokenize(text)  # Tokenize the text
+        tokens = [self.lemmatizer.lemmatize(word) for word in tokens if word not in self.stop_words]  # Lemmatize and remove stopwords
         
-        x_train = train_vec.toarray()
-        x_test = test_vec.toarray()  
+        return tokens
+    
+    def read_data(self, filepath):
+        
+        data = pd.read_csv(filepath)
+        sentiment_counts = data['school'].value_counts()
 
-        return x_train, x_test
+        print(sentiment_counts) # List of schools name and how much have for each school
 
-def compute_tfidf(train, test):
+        schools = ['plato']
+        for school in schools:
+            data[school] = data['school'].apply(lambda x: 1 if x == school else 0)
+
+        data = data.drop(columns=['school'])
+
+        train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
+        
+        y_train = train_data.iloc[:, 1:].values  # intelligence_score column 
+        y_train = y_train.reshape(-1,1)
+
+        y_test = test_data.iloc[:, 1:].values
+        y_test = y_test.reshape(-1,1)
+
+        return train_data, test_data, y_train, y_test
+    
+    def compute_bow(self, documents, data):
         """
-        Compute TF-IDF scores for a list of documents.
+        Compute Bag-Of-Bow scores for a list of documents.
 
         Parameters:
         documents (list of str): List of text documents.
 
         Returns:
-        tfidf_matrix: Sparse matrix of TF-IDF scores.
+        bow_matrix: Sparse matrix of Bag-Of-Bow scores.
         feature_names: List of feature names (terms).
         """
         # Define ngram_range parameter to use N-grams
-        vectorizer = TfidfVectorizer(max_features=10000, ngram_range=(2,2))
-        # Fit the model on the documents to learn the vocabulary
-        train_vec = vectorizer.fit_transform(train)
-        # Val true - transform train
-        # Transform the data (documents) into a BoW matrix
-        test_vec = vectorizer.transform(test)
-
-        # Get the feature names (terms)
-        train_feature_names = vectorizer.get_feature_names_out()
-
-        print(f"Train BoW matrix shape: {train_vec.shape}")
-        print(f"Number of features: {len(train_feature_names)}")
-        print(f"Number of rows in 'data': {len(train)}")
-
-        # Optionally, save the feature names to a file
-        with open('tf_idf.txt', 'w') as f:
-            f.write("Feature names (terms) from CountVectorizer:\n")
-            for feature in train_feature_names:
+        vectorizer = CountVectorizer()
+        vectorizer.fit(documents)
+        bow_matrix = vectorizer.transform(data)
+        feature_names = vectorizer.get_feature_names_out()
+        with open('bow_words.txt', 'w') as f:
+            f.write("Feature names (terms) from Bag Of Words vectorizer:\n")
+            for feature in feature_names:
                 f.write(f"{feature}\n")
-        
-        x_train = train_vec.toarray()
-        x_test = test_vec.toarray()  
+        bow_matrix_array = bow_matrix.toarray()
+        print(f'Data shape : {bow_matrix_array.shape}')
+        return bow_matrix_array
+    
+    def compute_tfidf(self, documents, data):
+        """
+        Compute TF-Idata scores for a list of documents.
 
-        return x_train, x_test
+        Parameters:
+        documents (list of str): List of text documents.
+
+        Returns:
+        tfidata_matrix: Sparse matrix of TF-Idata scores.
+        feature_names: List of feature names (terms).
+        """
+        # Define ngram_range parameter to use N-grams
+        vectorizer = TfidfVectorizer()
+        vectorizer.fit(documents)
+        tfidf_matrix = vectorizer.transform(data)
+        feature_names = vectorizer.get_feature_names_out()        
+        with open('tfidf_words.txt', 'w') as f:
+            f.write("Feature names (terms) from TF-Idata vectorizer:\n")
+            for feature in feature_names:
+                f.write(f"{feature}\n")
+
+        tfidf_matrix_array = tfidf_matrix.toarray()
+        print(f'Data shape : {tfidf_matrix_array.shape}')
+        return tfidf_matrix_array, feature_names
+    
+    def convert_to_vector(self, fit_data, transfrom_data, labels):
+        """
+        Process a CSV file to compute TF-Idata matrix for headlines.
+
+        Parameters:
+        filepath (str): Path to the CSV file. The file should have a column 'Label' for labels
+        and other columns containing text headlines.
+
+        Returns:
+        tfidata_matrix: Sparse matrix of TF-Idata scores.
+        bow_matrix: Sparse matrix of bow scores.
+        labels: List of labels.
+        feature_names: List of feature names (terms).
+        """ 
+        # Extract all texts from the 'sentence_str' column
+        combined_texts = fit_data['sentence_str'].astype(str).tolist()
+
+        # Clean the text
+        fit_cleaned_texts = [" ".join(self.clean_text(text)) for text in combined_texts]
+
+        # Extract all texts from the 'sentence_str' column
+        combined_texts = transfrom_data['sentence_str'].astype(str).tolist()
+
+        # Clean the text
+        transform_cleaned_texts = [" ".join(self.clean_text(text)) for text in combined_texts]
+
+        # tfidata_matrix = processor.compute_tfidf(fit_cleaned_headlines, transform_cleanes_headlines)
+
+        bow_matrix = self.compute_bow(fit_cleaned_texts, transform_cleaned_texts)
+
+        # tfidata_matrix = np.hstack((labels, tfidata_matrix_array))  
+
+        bow_matrix = np.hstack((labels, bow_matrix))
+
+        return bow_matrix
+
+
+
