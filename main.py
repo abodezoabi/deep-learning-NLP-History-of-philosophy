@@ -1,45 +1,252 @@
+import torch
 from evaluate_model import evaluate_model
 from text_processor import TextProcessor
-from train_model import train_logistic_regression, train_with_cross_validation
-
+from train_model import train_logistic_regression, train_logistic_regression_with_cv
 
 data_path = "Dataset/philosophy_data.csv"
+edit_data_path = "Dataset/philosophy_data_edit.csv"
 model_path = "Model/model.pth"
 
 processor = TextProcessor()
 
-print("[INFO] Read Data .....")
-train_data, test_data, y_train, y_test = processor.read_data(data_path)
 
-print("[INFO] Convert train Data to vectors .....")
-train_matrix = processor.convert_to_vector(train_data, train_data, y_train)
-
-x_train = train_matrix[:, 1:]  # Remaining columns are the bag of bow features
-y_train = train_matrix[:, 0]  # First column is the label
-
-print("[INFO] Convert test Data to vectors .....")
-test_matrix = processor.convert_to_vector(train_data, test_data, y_test)
-
-x_test = test_matrix[:, 1:]  # Remaining columns are the bag of bow features
-y_test = test_matrix[:, 0]  # First column is the label
-
-print("[INFO] Training the model...")
-model = train_logistic_regression(x_train, y_train, model_path)
-
-print("[INFO] Evaluate model...")
-evaluate_model(model, x_test, y_test)
-
-print("[INFO] Training the model with cross validations...")
-model = train_with_cross_validation(x_train, y_train, model_path)
-
-print("[INFO] Evaluate model...")
-evaluate_model(model, x_test, y_test)
+choosen_convert_data = 3 # Choose a conversion method : 1 - Bag-Of-Words, 2 - TF-IDF, 3 - Word2Vec
+choosen_training_model = 1 # Choose with or without cross-validation : 0 - without, 1 - with
+choosen_regularization = 2 # Choose regularization type or without regularization : 0 - without, 1 - Lasso, 2 - Ridged
+choosen_optimization = 3 # Choose optimization : 1 - SGD, 2 - ADAM, 3 - LBFGS
 
 
+# --------------------------- Convert Data to vectors with Bag-Of-Words ---------------------------
+if choosen_convert_data == 1:
+    print("[INFO] Read Data .....")
+    train_data, test_data, y_train, y_test, classes_names = processor.read_data(edit_data_path)
+
+    print("[INFO] Convert train Data to vectors using Bag-Of-Words.....")
+    train_matrix = processor.convert_to_vector(train_data, train_data, y_train, 'bow') # bow - Bag Of Words, tfidf - TFIDF
+
+    num_label_columns = y_train.shape[1]
+    x_train = train_matrix[:, num_label_columns:]  # Remaining columns are the bag of bow features
+    y_train = train_matrix[:, :num_label_columns]  # First column is the label
+
+    print("[INFO] Convert test Data to vectors using Bag-Of-Words.....")
+    test_matrix = processor.convert_to_vector(train_data, test_data, y_test, 'bow')
+
+    num_label_columns = y_test.shape[1]
+    x_test = test_matrix[:, num_label_columns:]  # Remaining columns are the bag of bow features
+    y_test = test_matrix[:, :num_label_columns]  # First column is the label
+
+# --------------------------- Convert Data to vectors with TF-IDF ---------------------------
+if choosen_convert_data == 2:
+    print("[INFO] Read Data .....")
+    train_data, test_data, y_train, y_test, classes_names = processor.read_data(edit_data_path)
+
+    print("[INFO] Convert train Data to vectors using Bag-Of-Words.....")
+    train_matrix = processor.convert_to_vector(train_data, train_data, y_train, 'tfidf') # bow - Bag Of Words, tfidf - TFIDF
+
+    num_label_columns = y_train.shape[1]
+    x_train = train_matrix[:, num_label_columns:]  # Remaining columns are the bag of bow features
+    y_train = train_matrix[:, :num_label_columns]  # First column is the label
+
+    print("[INFO] Convert test Data to vectors using Bag-Of-Words.....")
+    test_matrix = processor.convert_to_vector(train_data, test_data, y_test, 'tfidf')
+
+    num_label_columns = y_test.shape[1]
+    x_test = test_matrix[:, num_label_columns:]  # Remaining columns are the bag of bow features
+    y_test = test_matrix[:, :num_label_columns]  # First column is the label
+
+
+# --------------------------- Convert Data to vectors with Word2Vec ---------------------------
+if choosen_convert_data == 3:
+    print("[INFO] Read Data .....")
+    train_data, test_data, y_train, y_test, classes_names = processor.read_data(data_path)
+
+    print("[INFO] Training Word2Vec model .....")
+    word2vec_model = processor.train_word2vec(
+        train_data['sentence_str'].tolist(),
+        vector_size=100,  
+        window=5,         
+        min_count=2,     
+    )
+
+    print("[INFO] Convert train data to Word2Vec embeddings .....")
+    train_embeddings = processor.convert_to_word2vec(word2vec_model, train_data['sentence_str'].tolist())
+    x_train = train_embeddings
+    print(f"Shape of train embeddings: {x_train.shape}")
+
+
+    print("[INFO] Convert test data to Word2Vec embeddings .....")
+    test_embeddings = processor.convert_to_word2vec(word2vec_model, test_data['sentence_str'].tolist())
+    x_test = test_embeddings
+    print(f"Shape of test embeddings: {x_test.shape}")
+ 
+# --------------------------------- Train model without cross validation ---------------------------------
+if choosen_training_model == 0:
+
+    #    ----------------- regularization - Lasso, optimizer - SGD ----------------- 
+    if choosen_regularization == 1 and choosen_optimization == 1:
+        print("[INFO] Training the model : regularization - Lasso, optimizer - SGD...")
+        model = train_logistic_regression(
+            x_train, y_train, model_path, epochs=150, lr=0.01, regularization="l1", reg_lambda=0.001, optimize='sgd'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Ridged, optimizer - SGD ----------------- 
+    if choosen_regularization == 2 and choosen_optimization == 1:
+        print("[INFO] Training the model : regularization - Ridged, optimizer - SGD...")
+        model = train_logistic_regression(
+            x_train, y_train, model_path, epochs=150, lr=0.01, regularization="l2", reg_lambda=0.001, optimize='sgd'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Lasso, optimizer - ADAM ----------------- 
+    if choosen_regularization == 1 and choosen_optimization == 2:
+        print("[INFO] Training the model : regularization - Lasso, optimizer - ADAM...")
+        model = train_logistic_regression(
+            x_train, y_train, model_path, epochs=30, lr=0.01, regularization="l1", reg_lambda=0.001, optimize='adam'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Ridged, optimizer - ADAM ----------------- 
+    if choosen_regularization == 2 and choosen_optimization == 2:
+        print("[INFO] Training the model : regularization - Ridged, optimizer - ADAM...")
+        model = train_logistic_regression(
+            x_train, y_train, model_path, epochs=60, lr=0.01, regularization="l2", reg_lambda=0.001, optimize='adam'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Lasso, optimizer - LBFGS ----------------- 
+    if choosen_regularization == 1 and choosen_optimization == 3:
+        print("[INFO] Training the model : regularization - Lasso, optimizer - LBFGS...")
+        model = train_logistic_regression(
+            x_train, y_train, model_path, epochs=30, lr=0.01, regularization="l1", reg_lambda=0.001, optimize='lbfgs'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Ridged, optimizer - LBFGS ----------------- 
+    if choosen_regularization == 2 and choosen_optimization == 3:
+        print("[INFO] Training the model : regularization - Ridged, optimizer - LBFGS...")
+        model = train_logistic_regression(
+            x_train, y_train, model_path, epochs=30, lr=0.01, regularization="l2", reg_lambda=0.001, optimize='lbfgs'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
 
 
 
 
 
+# --------------------------------- Train model with cross validation ---------------------------------
+if choosen_training_model == 1:
+    
+    #    ----------------- regularization - Lasso, optimizer - SGD ----------------- 
+    if choosen_regularization == 1 and choosen_optimization == 1:
+        print("[INFO] Training the model : regularization - Lasso, optimizer - SGD...")
+        model = train_logistic_regression_with_cv(
+            x_train, y_train, model_path, epochs=150, lr=0.01, regularization="l1", reg_lambda=0.001, optimize='sgd'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
 
+
+    #    ----------------- regularization - Ridged, optimizer - SGD ----------------- 
+    if choosen_regularization == 2 and choosen_optimization == 1:
+        print("[INFO] Training the model : regularization - Ridged, optimizer - SGD...")
+        model = train_logistic_regression_with_cv(
+            x_train, y_train, model_path, epochs=150, lr=0.01, regularization="l2", reg_lambda=0.001, optimize='sgd'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Lasso, optimizer - ADAM ----------------- 
+    if choosen_regularization == 1 and choosen_optimization == 2:
+        print("[INFO] Training the model : regularization - Lasso, optimizer - ADAM...")
+        model = train_logistic_regression_with_cv(
+            x_train, y_train, model_path, epochs=30, lr=0.01, regularization="l1", reg_lambda=0.001, optimize='adam'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Ridged, optimizer - ADAM ----------------- 
+    if choosen_regularization == 2 and choosen_optimization == 2:
+        print("[INFO] Training the model : regularization - Ridged, optimizer - ADAM...")
+        model = train_logistic_regression_with_cv(
+            x_train, y_train, model_path, epochs=60, lr=0.01, regularization="l2", reg_lambda=0.001, optimize='adam'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Lasso, optimizer - LBFGS ----------------- 
+    if choosen_regularization == 1 and choosen_optimization == 3:
+        print("[INFO] Training the model : regularization - Lasso, optimizer - LBFGS...")
+        model = train_logistic_regression_with_cv(
+            x_train, y_train, model_path, epochs=30, lr=0.01, regularization="l1", reg_lambda=0.001, optimize='lbfgs'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+    #    ----------------- regularization - Ridged, optimizer - LBFGS ----------------- 
+    if choosen_regularization == 2 and choosen_optimization == 3:
+        print("[INFO] Training the model : regularization - Ridged, optimizer - LBFGS...")
+        model = train_logistic_regression_with_cv(
+            x_train, y_train, model_path, epochs=30, lr=0.01, regularization="l2", reg_lambda=0.001, optimize='lbfgs'
+        )
+        print("[INFO] Evaluate model...")
+        precision, recall, f1 = evaluate_model(model, x_test, y_test, classes_names)
+
+
+
+
+#    ----------------- Manual Testing ----------------- 
+
+print("[INFO] Test model classification with sample (text)...")
+
+model.eval()
+
+text_class1 = "When things have only a name in common and the definition of being which corresponds to the name is different, they are called homonymous."
+text_class2 = "Why this Critique is titled a critique not of pure practical reason but simply of practical reason as such, although its parallelism with the critique of speculative reas seems to require the former on this the treatise provides sufficient information."
+text_class3 = "What's new, Socrates, to make you leave your usual haunts in the Lyceum and spend your time here by the king archon's court?"
+
+text1_embedding = processor.convert_to_word2vec(word2vec_model, [text_class1])
+text1_embedding = torch.tensor(text1_embedding, dtype=torch.float32)
+
+text2_embedding = processor.convert_to_word2vec(word2vec_model, [text_class2])
+text2_embedding = torch.tensor(text2_embedding, dtype=torch.float32)
+
+text3_embedding = processor.convert_to_word2vec(word2vec_model, [text_class3])
+text3_embedding = torch.tensor(text3_embedding, dtype=torch.float32)
+
+with torch.no_grad():
+    y_pred1 = model(text1_embedding)
+    y_pred2 = model(text2_embedding)
+    y_pred3 = model(text3_embedding)  
+    predicted_class1 = torch.argmax(y_pred1, dim=1).item()  
+    predicted_class2 = torch.argmax(y_pred2, dim=1).item()  
+    predicted_class3 = torch.argmax(y_pred3, dim=1).item()  
+
+
+print(f'Text_1: {text_class1}\n'
+      f'True answer : {classes_names[0]}\n'
+      f'predicted answer : {classes_names[predicted_class1]}\n')
+
+print(f'\nText_2: {text_class2}\n'
+      f'True answer : {classes_names[1]}\n'
+      f'predicted answer : {classes_names[predicted_class2]}\n')
+
+print(f'\nText_3: {text_class3}\n'
+      f'True answer : {classes_names[2]}\n'
+      f'predicted answer : {classes_names[predicted_class3]}')
 

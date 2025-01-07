@@ -1,21 +1,28 @@
 import torch
+import numpy as np
+from sklearn.metrics import precision_score, recall_score, f1_score, classification_report
 
-def evaluate_model(model, test_vectors, test_labels):
-    """
-    Evaluate the trained model on the test data.
-
-    Parameters:
-        model (LogisticRegressionModel): The trained model.
-        test_vectors (numpy.array): The test input features.
-        test_labels (numpy.array): The true labels of the test data.
-    """
-    model.eval()  # Set the model to evaluation mode
-    test_vectors = torch.tensor(test_vectors, dtype=torch.float32)
-    test_labels = torch.tensor(test_labels, dtype=torch.float32).view(-1, 1)
+def evaluate_model(model, x_test, y_test, classes_names):
+    if not isinstance(x_test, torch.Tensor):
+        x_test = torch.tensor(x_test, dtype=torch.float32)
+    if not isinstance(y_test, torch.Tensor):
+        y_test = torch.tensor(np.argmax(y_test, axis=1), dtype=torch.long)  # One-hot to class indices
     
+    model.eval()
     with torch.no_grad():
-        outputs = model(test_vectors)
-        predicted = (outputs >= 0.5).float()  # Threshold at 0.5 for binary classification
-        correct = (predicted == test_labels).float().sum()
-        accuracy = correct / len(test_labels)
-        print(f"Test Accuracy: {accuracy.item():.4f}")
+        y_pred = model(x_test)
+        y_pred_classes = torch.argmax(y_pred, dim=1)
+
+    accuracy = (y_pred_classes == y_test).sum().item() / len(y_test)
+
+    # Calculate precision, recall, and F1-score for each class
+    precision = precision_score(y_test, y_pred_classes, average=None)
+    recall = recall_score(y_test, y_pred_classes, average=None)
+    f1 = f1_score(y_test, y_pred_classes, average=None)
+
+    # Print metrics for each class
+    print("Classification Report:")
+    print(classification_report(y_test, y_pred_classes, target_names=[f"{classes_names[i]}" for i in range(len(precision))]))
+
+    print(f"Test Accuracy: {accuracy * 100:.2f}%")
+    return precision, recall, f1

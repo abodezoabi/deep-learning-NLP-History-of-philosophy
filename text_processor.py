@@ -7,6 +7,7 @@ from nltk.corpus import stopwords
 from nltk.util import ngrams
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 import numpy as np
+from gensim.models import Word2Vec
 
 class TextProcessor:
     def __init__(self, n=2):
@@ -23,7 +24,7 @@ class TextProcessor:
         tokens = [self.lemmatizer.lemmatize(word) for word in tokens if word not in self.stop_words]  # Lemmatize and remove stopwords
         
         return tokens
-    
+
     def read_data(self, filepath):
         
         data = pd.read_csv(filepath)
@@ -31,21 +32,17 @@ class TextProcessor:
 
         print(sentiment_counts) # List of schools name and how much have for each school
 
-        schools = ['plato']
+        schools = ['aristotle', 'german_idealism', 'plato']
         for school in schools:
             data[school] = data['school'].apply(lambda x: 1 if x == school else 0)
 
-        data = data.drop(columns=['school'])
 
         train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
         
-        y_train = train_data.iloc[:, 1:].values  # intelligence_score column 
-        y_train = y_train.reshape(-1,1)
+        y_train = train_data[schools].values
+        y_test = test_data[schools].values
 
-        y_test = test_data.iloc[:, 1:].values
-        y_test = y_test.reshape(-1,1)
-
-        return train_data, test_data, y_train, y_test
+        return train_data, test_data, y_train, y_test, schools
     
     def compute_bow(self, documents, data):
         """
@@ -61,14 +58,10 @@ class TextProcessor:
         # Define ngram_range parameter to use N-grams
         vectorizer = CountVectorizer()
         vectorizer.fit(documents)
+
         bow_matrix = vectorizer.transform(data)
-        feature_names = vectorizer.get_feature_names_out()
-        with open('bow_words.txt', 'w') as f:
-            f.write("Feature names (terms) from Bag Of Words vectorizer:\n")
-            for feature in feature_names:
-                f.write(f"{feature}\n")
         bow_matrix_array = bow_matrix.toarray()
-        print(f'Data shape : {bow_matrix_array.shape}')
+        print(f'Data shape : {bow_matrix_array.shape}')        
         return bow_matrix_array
     
     def compute_tfidf(self, documents, data):
@@ -85,18 +78,15 @@ class TextProcessor:
         # Define ngram_range parameter to use N-grams
         vectorizer = TfidfVectorizer()
         vectorizer.fit(documents)
-        tfidf_matrix = vectorizer.transform(data)
-        feature_names = vectorizer.get_feature_names_out()        
-        with open('tfidf_words.txt', 'w') as f:
-            f.write("Feature names (terms) from TF-Idata vectorizer:\n")
-            for feature in feature_names:
-                f.write(f"{feature}\n")
 
+        tfidf_matrix = vectorizer.transform(data)
+     
         tfidf_matrix_array = tfidf_matrix.toarray()
+
         print(f'Data shape : {tfidf_matrix_array.shape}')
-        return tfidf_matrix_array, feature_names
+        return tfidf_matrix_array
     
-    def convert_to_vector(self, fit_data, transfrom_data, labels):
+    def convert_to_vector(self, fit_data, transfrom_data, labels, vectorizer = 'b'):
         """
         Process a CSV file to compute TF-Idata matrix for headlines.
 
@@ -122,15 +112,69 @@ class TextProcessor:
         # Clean the text
         transform_cleaned_texts = [" ".join(self.clean_text(text)) for text in combined_texts]
 
-        # tfidata_matrix = processor.compute_tfidf(fit_cleaned_headlines, transform_cleanes_headlines)
+        if vectorizer == 'bow':
+            data_matrix = self.compute_bow(fit_cleaned_texts, transform_cleaned_texts)
+        if vectorizer == 'tdidf':
+            data_matrix = self.compute_tfidf(fit_cleaned_texts, transform_cleaned_texts)
 
-        bow_matrix = self.compute_bow(fit_cleaned_texts, transform_cleaned_texts)
+        data_matrix = np.hstack((labels, data_matrix))
+        print(f"label shape - {labels.shape}, bow shape - {data_matrix.shape}")
+        return data_matrix
 
-        # tfidata_matrix = np.hstack((labels, tfidata_matrix_array))  
+    def train_word2vec(self, documents, vector_size=100, window=5, min_count=1, epochs=10):
+        """
+        Train a Word2Vec model on a list of tokenized documents.
 
-        bow_matrix = np.hstack((labels, bow_matrix))
+        Parameters:
+        documents (list of str): List of text documents.
+        vector_size (int): Dimensionality of the word vectors.
+        window (int): Maximum distance between the current and predicted word within a sentence.
+        min_count (int): Ignores all words with total frequency lower than this.
+        epochs (int): Number of iterations (epochs) over the corpus.
 
-        return bow_matrix
+        Returns:
+        model: Trained Word2Vec model.
+        """
+        # Clean and tokenize documents
+        cleaned_documents = [self.clean_text(doc) for doc in documents]
+        
+        # Train Word2Vec model
+        model = Word2Vec(
+            sentences=cleaned_documents,
+            vector_size=vector_size,
+            window=window,
+            min_count=min_count,
+            workers=4
+        )
+        model.train(cleaned_documents, total_examples=len(cleaned_documents), epochs=epochs)
+        print("Word2Vec model trained successfully.")
+        return model
 
+    def convert_to_word2vec(self, model, documents):
+        """
+        Convert documents to sentence embeddings using a trained Word2Vec model.
 
+        Parameters:
+        model: Trained Word2Vec model.
+        documents (list of str): List of text documents.
+
+        Returns:
+        sentence_embeddings: Matrix of sentence embeddings (one vector per document).
+        """
+        # Clean and tokenize documents
+        cleaned_documents = [self.clean_text(doc) for doc in documents]
+
+        # Compute sentence embeddings
+        sentence_embeddings = []
+        for tokens in cleaned_documents:
+            word_vectors = [model.wv[word] for word in tokens if word in model.wv]
+            if word_vectors:
+                sentence_vector = np.mean(word_vectors, axis=0)
+            else:
+                sentence_vector = np.zeros(model.vector_size)  # If no words match, use zero vector
+            sentence_embeddings.append(sentence_vector)
+
+        sentence_embeddings = np.array(sentence_embeddings)
+
+        return sentence_embeddings
 
