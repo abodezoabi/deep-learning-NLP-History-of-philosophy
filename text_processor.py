@@ -4,7 +4,6 @@ from sklearn.model_selection import train_test_split
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
-from nltk.util import ngrams
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 import numpy as np
 from gensim.models import Word2Vec
@@ -60,8 +59,7 @@ class TextProcessor:
         vectorizer.fit(documents)
 
         bow_matrix = vectorizer.transform(data)
-        bow_matrix_array = bow_matrix.toarray()
-        print(f'Data shape : {bow_matrix_array.shape}')        
+        bow_matrix_array = bow_matrix.toarray()  
         return bow_matrix_array
     
     def compute_tfidf(self, documents, data):
@@ -80,13 +78,10 @@ class TextProcessor:
         vectorizer.fit(documents)
 
         tfidf_matrix = vectorizer.transform(data)
-     
         tfidf_matrix_array = tfidf_matrix.toarray()
-
-        print(f'Data shape : {tfidf_matrix_array.shape}')
         return tfidf_matrix_array
     
-    def convert_to_vector(self, fit_data, transfrom_data, labels, vectorizer = 'b'):
+    def convert_to_vector(self, fit_data, transfrom_data, labels, vectorizer = 'bow'):
         """
         Process a CSV file to compute TF-Idata matrix for headlines.
 
@@ -114,11 +109,11 @@ class TextProcessor:
 
         if vectorizer == 'bow':
             data_matrix = self.compute_bow(fit_cleaned_texts, transform_cleaned_texts)
-        if vectorizer == 'tdidf':
+        if vectorizer == 'tfidf':
             data_matrix = self.compute_tfidf(fit_cleaned_texts, transform_cleaned_texts)
 
         data_matrix = np.hstack((labels, data_matrix))
-        print(f"label shape - {labels.shape}, bow shape - {data_matrix.shape}")
+        print(f"Y shape - {labels.shape}, X shape - {data_matrix.shape}")
         return data_matrix
 
     def train_word2vec(self, documents, vector_size=100, window=5, min_count=1, epochs=10):

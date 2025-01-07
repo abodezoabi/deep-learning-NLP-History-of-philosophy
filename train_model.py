@@ -11,7 +11,7 @@ class LogisticRegressionModel(nn.Module):
         self.fc = nn.Linear(input_dim, num_classes)  # Fully connected layer for multi-class classification
 
     def forward(self, x):
-        return self.fc(x)  # No need for softmax here; CrossEntropyLoss includes it internally
+        return self.fc(x)  # CrossEntropyLoss includes it internally
 
 
 # Helper function for calculating accuracy
@@ -22,7 +22,7 @@ def calculate_accuracy(y_pred, y_true):
     return accuracy
 
 
-# Training function with improvements
+# --------------------------------- Logistic Regression without cross validation ---------------------------------
 def train_logistic_regression(
     x_data,
     y_data,
@@ -157,6 +157,7 @@ def train_logistic_regression(
     return model
 
 
+# --------------------------------- Logistic Regression with cross validation ---------------------------------
 
 def train_logistic_regression_with_cv(
     x_data,
