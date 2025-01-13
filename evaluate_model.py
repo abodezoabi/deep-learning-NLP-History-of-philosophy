@@ -20,9 +20,10 @@ def evaluate_model(model, x_test, y_test, classes_names):
     recall = recall_score(y_test, y_pred_classes, average=None)
     f1 = f1_score(y_test, y_pred_classes, average=None)
 
+    print(f"Test Accuracy: {accuracy * 100:.2f}%")
+
     # Print metrics for each class
     print("Classification Report:")
     print(classification_report(y_test, y_pred_classes, target_names=[f"{classes_names[i]}" for i in range(len(precision))]))
 
-    print(f"Test Accuracy: {accuracy * 100:.2f}%")
     return precision, recall, f1

@@ -31,12 +31,17 @@ class TextProcessor:
 
         print(sentiment_counts) # List of schools name and how much have for each school
 
-        schools = ['aristotle', 'german_idealism', 'plato']
+        schools = ['aristotle', 'german_idealism', 'plato', 'continental']
+
         for school in schools:
             data[school] = data['school'].apply(lambda x: 1 if x == school else 0)
 
-
-        train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
+        train_data, test_data = train_test_split(
+        data, 
+        test_size=0.2, 
+        random_state=42, 
+        stratify=data['school']  
+        )
         
         y_train = train_data[schools].values
         y_test = test_data[schools].values

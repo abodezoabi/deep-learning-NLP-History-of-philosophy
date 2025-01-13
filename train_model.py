@@ -50,6 +50,11 @@ def train_logistic_regression(
     Returns:
         model (LogisticRegressionModel): The trained Logistic Regression model.
     """
+
+    # Split data into training and validation sets
+    x_train, x_val, y_train, y_val = train_test_split(
+        x_data, y_data, test_size=validation_split, random_state=42
+    )
     # Split data into training and validation sets
     x_train, x_val, y_train, y_val = train_test_split(
         x_data, y_data, test_size=validation_split, random_state=42
