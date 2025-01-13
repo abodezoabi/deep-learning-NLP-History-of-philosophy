@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import numpy as np
 
-data_path = "s/philosophy_data.csv"
+data_path = "Dataset/philosophy_data.csv"
 edit_data_path = "Dataset/philosophy_data_edit.csv"
 model_path = "Model/model.pth"
 
