@@ -1,100 +1,76 @@
 import torch
-from text_processor import TextProcessor
-from nn_model import FullyConnectedNN
-from train_nn import train_fnn
-from evaluate_nn import evaluate_fnn
-from sklearn.preprocessing import StandardScaler
+import torch.optim as optim
+import torch.nn as nn
+from sklearn.model_selection import train_test_split
 
-# Paths and configurations
-data_path = "Dataset/philosophy_data.csv"  # Path to your dataset
-model_save_path = "Model/fnn_model.pth"         # Path to save the trained model
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# Helper function for calculating accuracy
+def calculate_accuracy(y_pred, y_true):
+    """Calculate accuracy by comparing predicted and true labels."""
+    y_pred_classes = torch.argmax(y_pred, dim=1)
+    accuracy = (y_pred_classes == y_true).sum().item() / len(y_true)
+    return accuracy
 
-# Hyperparameters
-input_dim = 100         # Adjust based on vectorization output
-hidden_dim = 1024        # Number of neurons in the hidden layer
-num_classes = 4         # Adjust based on your dataset
-dropout_rate = 0.6      # Dropout rate for regularization
-epochs = 150            # Number of training epochs
-learning_rate = 0.01  # Learning rate for optimizer
-batch_size = 64         # Batch size for training
+def train_fnn(x_data, y_data, model, class_weights, epochs=100, lr=0.001, batch_size=32, device='cpu'):
+    """
+    Train a Fully Connected Neural Network (FNN).
+    """
+    # Split into train and validation sets
+    x_train, x_val, y_train, y_val = train_test_split(x_data, y_data, test_size=0.2, random_state=42)
 
-# Step 1: Data Preprocessing
-print("[INFO] Processing data...")
-processor = TextProcessor()
+    # Convert to PyTorch tensors
+    x_train = torch.tensor(x_train, dtype=torch.float32).to(device)
+    y_train = torch.tensor(y_train, dtype=torch.long).to(device)
+    x_val = torch.tensor(x_val, dtype=torch.float32).to(device)
+    y_val = torch.tensor(y_val, dtype=torch.long).to(device)
 
-# Choose vectorization method (1 - BoW, 2 - TF-IDF, 3 - Word2Vec)
-vectorizer_choice = 3  # Adjust based on your preference
+    # Loss and optimizer
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
-if vectorizer_choice == 1:
-    train_data, test_data, y_train, y_test, classes_names = processor.read_data(data_path)
+    # Optional: Implement a learning rate scheduler
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 
-    train_vectors = processor.convert_to_vector(train_data, train_data, y_train, vectorizer='bow')
-    test_vectors = processor.convert_to_vector(train_data, test_data, y_test, vectorizer='bow')
-    # Normalize the input data
-    scaler = StandardScaler()
-    x_train = scaler.fit_transform(train_vectors)
-    x_test = scaler.fit_transform(test_vectors)
+    # Training loop
+    for epoch in range(epochs):
+        model.train()
 
-elif vectorizer_choice == 2:
-    train_data, test_data, y_train, y_test, classes_names = processor.read_data(data_path)
-    train_vectors = processor.convert_to_vector(train_data, train_data, y_train, vectorizer='tfidf')
-    test_vectors = processor.convert_to_vector(train_data, test_data, y_test, vectorizer='tfidf')
-    # Normalize the input data
-    scaler = StandardScaler()
-    x_train = scaler.fit_transform(train_vectors)
-    x_test = scaler.fit_transform(test_vectors)
-elif vectorizer_choice == 3:
-    print("[INFO] Read Data .....")
-    train_data, test_data, y_train, y_test, classes_names = processor.read_data(data_path)
+        total_train_loss = 0.0
+        total_train_accuracy = 0.0
+        num_batches = 0
 
-    print("[INFO] Training Word2Vec model .....")
-    word2vec_model = processor.train_word2vec(
-        train_data['sentence_str'].tolist(),
-        vector_size=100,  
-        window=10,         
-        min_count=2,     
-    )
-    print("[INFO] Convert train data to Word2Vec embeddings .....")
-    train_embeddings = processor.convert_to_word2vec(word2vec_model, train_data['sentence_str'].tolist())
-    x_train = train_embeddings
+        for i in range(0, len(x_train), batch_size):
+            x_batch = x_train[i:i + batch_size]
+            y_batch = y_train[i:i + batch_size]
+            optimizer.zero_grad()
+            y_pred = model(x_batch)
+            loss = criterion(y_pred, y_batch)
+            loss.backward()
+            optimizer.step()
 
-    # Normalize the input data
-    scaler = StandardScaler()
-    x_train = scaler.fit_transform(x_train)
+            total_train_loss += loss.item()
+            total_train_accuracy += calculate_accuracy(y_pred, y_batch)
+            num_batches += 1
 
-    print(f"Shape of train embeddings: {x_train.shape}")
+        # Calculate average train loss and accuracy
+        avg_train_loss = total_train_loss / num_batches
+        avg_train_accuracy = total_train_accuracy / num_batches
 
+        # Validation phase
+        model.eval()
+        with torch.no_grad():
+            y_val_pred = model(x_val)
+            val_loss = criterion(y_val_pred, y_val).item()
+            val_accuracy = calculate_accuracy(y_val_pred, y_val)
 
-    print("[INFO] Convert test data to Word2Vec embeddings .....")
-    test_embeddings = processor.convert_to_word2vec(word2vec_model, test_data['sentence_str'].tolist())
-    x_test = test_embeddings
+        # Optional: Step the learning rate scheduler
+        scheduler.step()
 
-    x_test = scaler.fit_transform(x_test)
+        # Print training progress
+        if epoch % 10 == 0 or epoch == epochs - 1:
+            print(
+                f"Epoch {epoch}/{epochs}, Train Loss: {avg_train_loss:.4f}, Train Accuracy: {avg_train_accuracy * 100:.2f}%, "
+                f"Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy * 100:.2f}%"
+            )
 
-    print(f"Shape of test embeddings: {x_test.shape}")
-else:
-    raise ValueError("Invalid vectorizer choice. Please select 1, 2, or 3.")
-
-# Prepare data for training
-y_train = y_train.argmax(axis=1)  # Convert one-hot labels to indices
-y_test = y_test.argmax(axis=1)    # Convert one-hot labels to indices
-
-# Step 2: Define the Model
-print("[INFO] Defining the neural network model...")
-model = FullyConnectedNN(input_dim=input_dim, hidden_dim=hidden_dim, num_classes=num_classes, dropout_rate=dropout_rate)
-model.to(device)
-
-# Step 3: Train the Model
-print("[INFO] Training the model...")
-model = train_fnn(x_train, y_train, model, epochs=epochs, lr=learning_rate, batch_size=batch_size, device=device)
-
-# Save the trained model
-torch.save(model.state_dict(), model_save_path)
-print(f"[INFO] Model saved to {model_save_path}")
-
-# Step 4: Evaluate the Model
-print("[INFO] Evaluating the model...")
-accuracy = evaluate_fnn(model, x_test, y_test, classes_names, device=device)
-
-print(f"[INFO] Final Test Accuracy: {accuracy * 100:.2f}%")
+    print("Training complete!")
+    return model

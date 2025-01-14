@@ -46,7 +46,7 @@ class TextProcessor:
         y_train = train_data[schools].values
         y_test = test_data[schools].values
 
-        return train_data, test_data, y_train, y_test, schools
+        return train_data, test_data, y_train, y_test, schools, sentiment_counts
     
     def compute_bow(self, documents, data):
         """

@@ -14,7 +14,7 @@ processor = TextProcessor()
 
 
 choosen_convert_data = 3 # Choose a conversion words to vector method : 1 - Bag-Of-Words, 2 - TF-IDF, 3 - Word2Vec
-choosen_training_model = 0 # Choose with or without cross-validation : 0 - without cross-validation , 1 - with cross-validation 
+choosen_training_model = 1 # Choose with or without cross-validation : 0 - without cross-validation , 1 - with cross-validation
 choosen_regularization = 1 # Choose regularization type or without regularization : 0 - without regularization, 1 - Lasso, 2 - Ridged
 choosen_optimization = 3 # Choose optimization : 1 - SGD, 2 - ADAM, 3 - LBFGS
 
