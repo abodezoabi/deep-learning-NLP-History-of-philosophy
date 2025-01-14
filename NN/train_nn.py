@@ -1,8 +1,7 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
+import torch.nn as nn
 from sklearn.model_selection import train_test_split
-
 
 # Helper function for calculating accuracy
 def calculate_accuracy(y_pred, y_true):
@@ -11,24 +10,12 @@ def calculate_accuracy(y_pred, y_true):
     accuracy = (y_pred_classes == y_true).sum().item() / len(y_true)
     return accuracy
 
-
-def train_fnn(
-        x_data,
-        y_data,
-        model,
-        class_weights,
-        epochs=100,
-        lr=0.001,
-        batch_size=32,
-        device='cpu'
-):
+def train_fnn(x_data, y_data, model, class_weights, epochs=100, lr=0.001, batch_size=32, device='cpu'):
     """
     Train a Fully Connected Neural Network (FNN).
     """
     # Split into train and validation sets
-    x_train, x_val, y_train, y_val = train_test_split(
-        x_data, y_data, test_size=0.2, random_state=42
-    )
+    x_train, x_val, y_train, y_val = train_test_split(x_data, y_data, test_size=0.2, random_state=42)
 
     # Convert to PyTorch tensors
     x_train = torch.tensor(x_train, dtype=torch.float32).to(device)
@@ -39,6 +26,9 @@ def train_fnn(
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    # Optional: Implement a learning rate scheduler
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 
     # Training loop
     for epoch in range(epochs):
@@ -72,17 +62,15 @@ def train_fnn(
             val_loss = criterion(y_val_pred, y_val).item()
             val_accuracy = calculate_accuracy(y_val_pred, y_val)
 
+        # Optional: Step the learning rate scheduler
+        scheduler.step()
+
         # Print training progress
         if epoch % 10 == 0 or epoch == epochs - 1:
             print(
                 f"Epoch {epoch}/{epochs}, Train Loss: {avg_train_loss:.4f}, Train Accuracy: {avg_train_accuracy * 100:.2f}%, "
                 f"Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy * 100:.2f}%"
             )
-
-    print(
-        f"Final Train Accuracy: {avg_train_accuracy * 100:.2f}%, "
-        f"Final Val Accuracy: {val_accuracy * 100:.2f}%"
-    )
 
     print("Training complete!")
     return model
