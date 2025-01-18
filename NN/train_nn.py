@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from sklearn.model_selection import train_test_split
-
+import numpy as np
 # Helper function for calculating accuracy
 def calculate_accuracy(y_pred, y_true):
     """Calculate accuracy by comparing predicted and true labels."""
@@ -10,7 +10,7 @@ def calculate_accuracy(y_pred, y_true):
     accuracy = (y_pred_classes == y_true).sum().item() / len(y_true)
     return accuracy
 
-def train_fnn(x_data, y_data, model, class_weights, epochs=100, lr=0.001, batch_size=32, device='cpu'):
+def train_fnn(x_data, y_data, model, num_classes, epochs=100, lr=0.001, batch_size=32, device='cpu'):
     """
     Train a Fully Connected Neural Network (FNN).
     """
@@ -23,6 +23,13 @@ def train_fnn(x_data, y_data, model, class_weights, epochs=100, lr=0.001, batch_
     x_val = torch.tensor(x_val, dtype=torch.float32).to(device)
     y_val = torch.tensor(y_val, dtype=torch.long).to(device)
 
+    # Count occurrences of each class
+    class_counts = np.bincount(y_train)
+    total_samples = len(y_train)
+
+    # Compute class weights
+    class_weights = total_samples / (num_classes * class_counts)
+    class_weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -62,7 +69,7 @@ def train_fnn(x_data, y_data, model, class_weights, epochs=100, lr=0.001, batch_
             val_loss = criterion(y_val_pred, y_val).item()
             val_accuracy = calculate_accuracy(y_val_pred, y_val)
 
-        # Optional: Step the learning rate scheduler
+        # Step the learning rate scheduler
         scheduler.step()
 
         # Print training progress

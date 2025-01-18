@@ -10,9 +10,12 @@ class FullyConnectedNN(nn.Module):
         self.fc2 = nn.Linear(hidden_dim, hidden_dim // 2)
         self.bn2 = nn.BatchNorm1d(hidden_dim // 2)
 
+        self.fc3 = nn.Linear(hidden_dim // 2, hidden_dim // 4)
+        self.bn3 = nn.BatchNorm1d(hidden_dim // 4)
+
         self.elu = nn.ELU()
         self.dropout = nn.Dropout(dropout_rate)
-        self.fc3 = nn.Linear(hidden_dim // 2, num_classes)
+        self.fc4 = nn.Linear(hidden_dim // 4, num_classes)
 
     def forward(self, x):
         # First Layer
@@ -27,6 +30,12 @@ class FullyConnectedNN(nn.Module):
         x = self.elu(x)
         x = self.dropout(x)
 
-        # Output Layer
+        # Third Layer
         x = self.fc3(x)
+        x = self.bn3(x)
+        x = self.elu(x)
+        x = self.dropout(x)
+
+        # Output Layer
+        x = self.fc4(x)
         return x
