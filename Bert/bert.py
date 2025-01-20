@@ -38,7 +38,7 @@ def load_data(file_path, test_size=0.2, random_state=42):
 def initialize_model(train_loader, epochs=4):
     config = BertConfig.from_pretrained(
         'bert-base-uncased',
-        num_labels=4,  # Number of classes in your dataset
+        num_labels=4,  # Number of classes in dataset
         hidden_dropout_prob=0.44,  # Dropout probability for hidden layers
         attention_probs_dropout_prob=0.44  # Dropout probability for attention layers
     )
